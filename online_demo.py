@@ -13,10 +13,16 @@ import numpy as np
 from cotracker.utils.visualizer import Visualizer
 from cotracker.predictor import CoTrackerOnlinePredictor
 
+from load_frames import load_images_from_folder
+
 
 DEFAULT_DEVICE = (
     "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 )
+
+# DEFAULT_DEVICE = ("cpu")
+# print default device
+print(f"Using device: {DEFAULT_DEVICE}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -54,11 +60,11 @@ if __name__ == "__main__":
     def _process_step(window_frames, is_first_step, grid_size, grid_query_frame):
         video_chunk = (
             torch.tensor(
-                np.stack(window_frames[-model.step * 2 :]), device=DEFAULT_DEVICE
+                np.stack(window_frames[-model.step * 2 :]), dtype=torch.float32, device=DEFAULT_DEVICE
             )
-            .float()
             .permute(0, 3, 1, 2)[None]
         )  # (1, T, 3, H, W)
+        print("Video chunk shape: ", video_chunk.shape)
         return model(
             video_chunk,
             is_first_step=is_first_step,
@@ -74,13 +80,18 @@ if __name__ == "__main__":
             plugin="FFMPEG",
         )
     ):
+    # for i, frame in enumerate(load_images_from_folder(args.video_path)):
         if i % model.step == 0 and i != 0:
+            print("Window frames length: ", len(window_frames))
             pred_tracks, pred_visibility = _process_step(
                 window_frames,
                 is_first_step,
                 grid_size=args.grid_size,
                 grid_query_frame=args.grid_query_frame,
             )
+            if pred_tracks is not None:
+                print("Pred tracks shape: ", pred_tracks.shape)
+                print("Pred visibility shape: ", pred_visibility.shape)
             is_first_step = False
         window_frames.append(frame)
     # Processing the final video frames in case video length is not a multiple of model.step
@@ -95,7 +106,7 @@ if __name__ == "__main__":
 
     # save a video with predicted tracks
     seq_name = args.video_path.split("/")[-1]
-    video = torch.tensor(np.stack(window_frames), device=DEFAULT_DEVICE).permute(
+    video = torch.tensor(np.stack(window_frames), dtype=torch.float32, device=DEFAULT_DEVICE).permute(
         0, 3, 1, 2
     )[None]
     vis = Visualizer(save_dir="./saved_videos", pad_value=120, linewidth=3)
