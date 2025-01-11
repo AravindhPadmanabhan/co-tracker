@@ -16,7 +16,7 @@ class CoTrackerOnlineWrapper(nn.Module):
         model = CoTrackerThreeOnline(stride=4, corr_radius=3, window_len=window_len)
         if checkpoint is not None:
             with open(checkpoint, "rb") as f:
-                state_dict = torch.load(f, map_location="cpu")
+                state_dict = torch.load(f, map_location="cpu", weights_only=True)
                 if "model" in state_dict:
                     state_dict = state_dict["model"]
             model.load_state_dict(state_dict)
@@ -33,12 +33,14 @@ class CoTrackerOnlineWrapper(nn.Module):
         queries: torch.Tensor = None,
     ):
         B, T, C, H, W = video_chunk.shape
+        # Initialize online video processing and save queried points
+        # This needs to be done before processing *each new video*
         if self.first_step:
             self.model.init_video_online_processing()         
             self.queries = queries
             self.first_step = False
-            # return (torch.zeros(B,T,queries.shape[1],2).to(video_chunk.device), torch.zeros(B,T,queries.shape[1]).to(video_chunk.device))
-            return (None, None)
+            return (torch.zeros(B,T,queries.shape[1],2).to(video_chunk.device), torch.zeros(B,T,queries.shape[1]).to(video_chunk.device))
+            # return (None, None)
 
         video_chunk = video_chunk.reshape(B * T, C, H, W)
         video_chunk = F.interpolate(
@@ -74,8 +76,8 @@ if __name__ == "__main__":
     B = 1  # Batch size
     T = 10  # Number of frames (time steps)
     C = 3  # Number of channels (RGB)
-    H = 576  # Height
-    W = 640  # Width
+    H = 720  # Height
+    W = 1296  # Width
     dummy_video = torch.randn(B, T, C, H, W).float().to(device)
     dummy_queries =  torch.randn(B, 100, 3).float().to(device)
     first_step=True
@@ -83,12 +85,13 @@ if __name__ == "__main__":
     # Export the model to ONNX format
     torch.onnx.export(
         wrapper_model,
-        args=(dummy_video,dummy_queries, first_step),
+        args=(dummy_video,dummy_queries),
         f="cotracker_online.onnx",
-        input_names=['video', 'queries', 'first_step'],
+        input_names=['video', 'queries'],
         output_names=['pred_tracks', 'pred_visibility'],
         dynamic_axes={
             'video': {1: 'time'},  # Allow variable sequence length
+            'queries': {1: 'number'},
             'pred_tracks': {1: 'time', 2: 'num_tracks'},
             'pred_visibility': {1: 'time', 2: 'num_tracks'}
         },
