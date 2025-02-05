@@ -308,6 +308,7 @@ def sample_features5d(input, coords):
     """
 
     B, T, _, _, _ = input.shape
+    # print("input shape:", input.shape)
 
     # B T C H W -> B C T H W
     input = input.permute(0, 2, 1, 3, 4)
@@ -316,7 +317,10 @@ def sample_features5d(input, coords):
     coords = coords.unsqueeze(3)
 
     # B C R1 R2 1
+    # print("input shape:", input.shape)
+    # print("coords shape: ", coords.shape)
     feats = bilinear_sampler(input, coords)
+    # print("output shape:", feats.shape)
 
     return feats.permute(0, 2, 3, 1, 4).view(
         B, feats.shape[2], feats.shape[3], feats.shape[1]
@@ -399,17 +403,19 @@ def bilinear_sampler(input, coords, align_corners=True, padding_mode="border"):
     """
 
     sizes = input.shape[2:]
+    # print(sizes)
 
     assert len(sizes) in [2, 3]
-
     if len(sizes) == 3:
         # t x y -> x y t to match dimensions T H W in grid_sample
         coords = coords[..., [1, 2, 0]]
 
     if align_corners:
-        coords = coords * torch.tensor(
+        scale_tensor = torch.tensor(
             [2 / max(size - 1, 1) for size in reversed(sizes)], device=coords.device
         )
+        coords = coords * scale_tensor
+        # print(scale_tensor)
     else:
         coords = coords * torch.tensor(
             [2 / size for size in reversed(sizes)], device=coords.device

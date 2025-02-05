@@ -19,6 +19,7 @@ DEFAULT_DEVICE = (
 )
 
 if __name__ == "__main__":
+    print("Device: ", DEFAULT_DEVICE)
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--video_path",
@@ -48,6 +49,7 @@ if __name__ == "__main__":
     else:
         model = torch.hub.load("facebookresearch/co-tracker", "cotracker3_online")
     model = model.to(DEFAULT_DEVICE)
+    # model.step=8
 
     window_frames = []
 
@@ -82,6 +84,10 @@ if __name__ == "__main__":
                 grid_query_frame=args.grid_query_frame,
             )
             is_first_step = False
+            print("image shape: ", window_frames[0].shape)
+            # if pred_tracks is not None:
+            #     print("Pred tracks shape= ", pred_tracks.shape)
+            #     print("Pred visib shape= ", pred_visibility.shape)
         window_frames.append(frame)
     # Processing the final video frames in case video length is not a multiple of model.step
     pred_tracks, pred_visibility = _process_step(

@@ -135,9 +135,12 @@ class CoTrackerThreeBase(nn.Module):
             [torch.zeros_like(queried_coords[..., :1]), queried_coords], dim=-1
         )[:, None]
         support_points = self.get_support_points(sample_coords, r, reshape_back=False)
+        # print("input shape: ", fmaps.reshape(B * T, D, 1, H_, W_).shape)
+        # print("coords shape: ", support_points.shape)
         correlation_feat = bilinear_sampler(
             fmaps.reshape(B * T, D, 1, H_, W_), support_points
         )
+        # print("output shape:", correlation_feat.shape)
         return correlation_feat.view(B, T, D, N, (2 * r + 1), (2 * r + 1)).permute(
             0, 1, 3, 4, 5, 2
         )
@@ -293,6 +296,8 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
         device = queries.device
         assert H % self.stride == 0 and W % self.stride == 0
 
+        print("T:", T)
+
         B, N, __ = queries.shape
         # B = batch size
         # S_trimmed = actual number of frames in the window
@@ -344,14 +349,17 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
             if self.online_coords_predicted is None:
                 # Init online predictions with zeros
                 self.online_coords_predicted = coords_predicted
+                # print("shape:", coords_predicted.shape )
                 self.online_vis_predicted = vis_predicted
                 self.online_conf_predicted = conf_predicted
             else:
                 # Pad online predictions with zeros for the current window
                 pad = min(step, T - step)
+                # print("shape before pad: ", self.online_coords_predicted.shape)
                 coords_predicted = F.pad(
                     self.online_coords_predicted, (0, 0, 0, 0, 0, pad), "constant"
                 )
+                # print("Shape after pad: ", coords_predicted.shape)
                 vis_predicted = F.pad(
                     self.online_vis_predicted, (0, 0, 0, pad), "constant"
                 )
@@ -537,5 +545,16 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
             )
         else:
             train_data = None
+
+        # print("online_ind ", self.online_ind)
+        # print("online_track_feat shapes: ", [self.online_track_feat[it].shape for it in range(4)])
+        # print("online_track_support len: ", [self.online_track_support[it].shape for it in range(4)])
+        # print("fmaps_pyramid len: ", [fmaps_pyramid[it].shape for it in range(4)])
+        # # print("online_coords_predicted shape: ", self.online_coords_predicted.shape)
+        # # print("online_conf_predicted shape: ", self.online_conf_predicted.shape)
+        # # print("online_vis_predicted shape: ", self.online_vis_predicted.shape)
+        # print("pad: ", pad)
+        # print("S: ", S)
+        # print("T: ", T)
 
         return coords_predicted, vis_predicted, conf_predicted, train_data

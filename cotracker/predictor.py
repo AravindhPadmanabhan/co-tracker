@@ -242,7 +242,7 @@ class CoTrackerOnlinePredictor(torch.nn.Module):
             if queries is not None:
                 B, N, D = queries.shape
                 self.N = N
-                assert D == 3
+                # assert D == 3
                 queries = queries.clone()
                 queries[:, :, 1:] *= queries.new_tensor(
                     [
@@ -269,7 +269,8 @@ class CoTrackerOnlinePredictor(torch.nn.Module):
                 )
             
             self.queries = queries
-            return (None, None)
+            # return (torch.zeros(1,8,100,2).to(video_chunk.device), torch.zeros(1,8,100).to(video_chunk.device))
+            return(None, None)
 
         video_chunk = video_chunk.reshape(B * T, C, H, W)
         video_chunk = F.interpolate(

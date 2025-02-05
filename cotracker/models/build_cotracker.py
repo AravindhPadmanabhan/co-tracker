@@ -38,7 +38,7 @@ def build_cotracker(checkpoint=None, offline=True, window_len=16, v2=False):
 
     if checkpoint is not None:
         with open(checkpoint, "rb") as f:
-            state_dict = torch.load(f, map_location="cpu")
+            state_dict = torch.load(f, map_location="cpu", weights_only=True)
             if "model" in state_dict:
                 state_dict = state_dict["model"]
         cotracker.load_state_dict(state_dict)
