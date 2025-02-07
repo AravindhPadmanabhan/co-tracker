@@ -168,6 +168,22 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
         self.online_vis_predicted = None
         self.online_conf_predicted = None
 
+    def update_track_feat(self, removed_indices):
+        B1, P1, N1, L1 = self.online_track_feat[0].shape
+        B2, P2, N2, L2 = self.online_track_support[0].shape
+
+        assert N1 == N2
+
+        if len(removed_indices) > 0:
+            mask = torch.ones(N1, dtype=torch.bool, device=self.online_track_feat[0].device) 
+            mask[removed_indices] = False
+            # mask = mask[None, None, :]
+            for i in range(self.corr_levels):
+                self.online_track_feat[i] = torch.cat((self.online_track_feat[i][:, :, mask], 
+                                                torch.zeros(B1, P1, len(removed_indices), L1, device=self.online_track_feat[i].device)), dim=2)
+                self.online_track_support[i] = torch.cat((self.online_track_support[i][:, :, mask], 
+                                                torch.zeros(B2, P2, len(removed_indices), L2, device=self.online_track_support[i].device)), dim=2)
+           
     def update_queries(self, coords, vis, conf, removed_indices):
         if len(removed_indices) > 0:
             mask = torch.ones(coords.shape[2], dtype=torch.bool, device=coords.device)
@@ -392,7 +408,7 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
         C_ = C
         H4, W4 = H // self.stride, W // self.stride
 
-        print("video shape: ", video.shape)
+        # print("video shape: ", video.shape)
         # Compute convolutional features for the video or for the current chunk in case of online mode
         if (not is_train) and (T > fmaps_chunk_size):
             fmaps = []
@@ -458,6 +474,8 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
                         track_feat_support, device=device
                     )
 
+                self.update_track_feat(removed_indices)
+
                 self.online_track_feat[i] += track_feat * sample_mask  # in normal cotracker, sample_mask would be true once (in one window) for each query, but rn in updated cotracker, it would be true more than once
                 self.online_track_support[i] += track_feat_support * sample_mask
                 track_feat_pyramid.append(
@@ -469,9 +487,6 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
             else:
                 track_feat_pyramid.append(track_feat.repeat(1, T_pad, 1, 1))
                 track_feat_support_pyramid.append(track_feat_support.unsqueeze(1))
-                
-        print("online track feat shape: ", [online_track_feat.shape for online_track_feat in self.online_track_feat])
-        print("online track support shape: ", [online_track_support.shape for online_track_support in self.online_track_support])
 
         D_coords = 2
         coord_preds, vis_preds, confidence_preds = [], [], []
