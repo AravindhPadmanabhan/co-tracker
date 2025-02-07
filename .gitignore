@@ -1,0 +1,12 @@
+# Ignore __pycache__ directories
+__pycache__/
+**/__pycache__/
+
+# Ignore compiled Python files
+*.pyc
+
+# Ignore videos
+*.mp4
+**/*.mp4
+
+*.egg-info/
