@@ -168,6 +168,27 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
         self.online_vis_predicted = None
         self.online_conf_predicted = None
 
+    def update_queries(self, coords, vis, conf, removed_indices):
+        if len(removed_indices) > 0:
+            mask = torch.ones(coords.shape[2], dtype=torch.bool, device=coords.device)
+            mask[removed_indices] = False
+            coords = torch.cat((coords[:, :, mask], torch.zeros(coords.shape[0], coords.shape[1], len(removed_indices), 2, device=coords.device)), dim=2)
+            vis = torch.cat((vis[:, :, mask], torch.zeros(vis.shape[0], vis.shape[1], len(removed_indices), device=vis.device)), dim=2)
+            conf = torch.cat((conf[:, :, mask], torch.zeros(conf.shape[0], conf.shape[1], len(removed_indices), device=conf.device)), dim=2)
+
+        return coords, vis, conf
+
+    def update_tracks(self, coords_predicted, vis_predicted, conf_predicted, removed_indices):
+        B, T, N, _ = coords_predicted.shape
+        if len(removed_indices) > 0:
+            mask = torch.ones(N, dtype=torch.bool, device=coords_predicted.device)
+            mask[removed_indices] = False
+            coords_predicted = torch.cat((coords_predicted[:, :, mask], torch.zeros(B, T, len(removed_indices), 2, device=coords_predicted.device)), dim=2)
+            vis_predicted = torch.cat((vis_predicted[:, :, mask], torch.zeros(B, T, len(removed_indices), device=vis_predicted.device)), dim=2)
+            conf_predicted = torch.cat((conf_predicted[:, :, mask], torch.zeros(B, T, len(removed_indices), device=conf_predicted.device)), dim=2)
+
+        return coords_predicted, vis_predicted, conf_predicted
+
     def forward_window(
         self,
         fmaps_pyramid,
@@ -272,6 +293,7 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
         add_space_attn=True,
         fmaps_chunk_size=200,
         is_online=False,
+        removed_indices=None,
     ):
         """Predict tracks
 
@@ -358,6 +380,7 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
                 conf_predicted = F.pad(
                     self.online_conf_predicted, (0, 0, 0, pad), "constant"
                 )
+                # coords_predicted, vis_predicted, conf_predicted = self.update_queries(coords_predicted, vis_predicted, conf_predicted, removed_indices)
 
         # We store our predictions here
         all_coords_predictions, all_vis_predictions, all_confidence_predictions = (
@@ -369,6 +392,7 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
         C_ = C
         H4, W4 = H // self.stride, W // self.stride
 
+        print("video shape: ", video.shape)
         # Compute convolutional features for the video or for the current chunk in case of online mode
         if (not is_train) and (T > fmaps_chunk_size):
             fmaps = []
@@ -392,6 +416,7 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
             B, -1, self.latent_dim, H // self.stride, W // self.stride
         )
         fmaps = fmaps.to(dtype)
+        # print("fmaps shape: ", fmaps.shape)
 
         # We compute track features
         fmaps_pyramid = []
@@ -407,6 +432,7 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
                 B, T_pad, self.latent_dim, fmaps_.shape[-2], fmaps_.shape[-1]
             )
             fmaps_pyramid.append(fmaps)
+        # print("fmaps pyramid shape: ", [fmap.shape for fmap in fmaps_pyramid])
         if is_online:
             sample_frames = queried_frames[:, None, :, None]  # B 1 N 1
             left = 0 if self.online_ind == 0 else self.online_ind + step
@@ -420,6 +446,8 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
                 queried_coords / 2**i,
                 support_radius=self.corr_radius,
             )
+            # print("track feat shape: ", track_feat.shape)
+            # print("track feat support shape: ", track_feat_support.shape)
 
             if is_online:
                 if self.online_track_feat[i] is None:
@@ -430,7 +458,7 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
                         track_feat_support, device=device
                     )
 
-                self.online_track_feat[i] += track_feat * sample_mask
+                self.online_track_feat[i] += track_feat * sample_mask  # in normal cotracker, sample_mask would be true once (in one window) for each query, but rn in updated cotracker, it would be true more than once
                 self.online_track_support[i] += track_feat_support * sample_mask
                 track_feat_pyramid.append(
                     self.online_track_feat[i].repeat(1, T_pad, 1, 1)
@@ -441,6 +469,9 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
             else:
                 track_feat_pyramid.append(track_feat.repeat(1, T_pad, 1, 1))
                 track_feat_support_pyramid.append(track_feat_support.unsqueeze(1))
+                
+        print("online track feat shape: ", [online_track_feat.shape for online_track_feat in self.online_track_feat])
+        print("online track support shape: ", [online_track_support.shape for online_track_support in self.online_track_support])
 
         D_coords = 2
         coord_preds, vis_preds, confidence_preds = [], [], []
@@ -480,11 +511,10 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
                 conf_init = torch.where(
                     copy_over.expand_as(conf_init), conf_prev, conf_init
                 )
-            
-            print("coords_init \n", coords_init*coords_init.new_tensor([(1296 - 1) / (self.model_resolution[1] - 1), (720 - 1) / (self.model_resolution[0] - 1)])*self.stride)
 
             attention_mask = (queried_frames < ind + S).reshape(B, 1, N)  # B S N
             # import ipdb; ipdb.set_trace()
+            # print("coords_init \n", coords_init*coords_init.new_tensor([(1296 - 1) / (self.model_resolution[1] - 1), (720 - 1) / (self.model_resolution[0] - 1)])*self.stride)
             coords, viss, confs = self.forward_window(
                 fmaps_pyramid=(
                     fmaps_pyramid
@@ -505,6 +535,7 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
             S_trimmed = (
                 T if is_online else min(T - ind, S)
             )  # accounts for last window duration
+            coords_predicted, vis_predicted, conf_predicted = self.update_tracks(coords_predicted, vis_predicted, conf_predicted, removed_indices)
             coords_predicted[:, ind : ind + S] = coords[-1][:, :S_trimmed]
             vis_predicted[:, ind : ind + S] = viss[-1][:, :S_trimmed]
             conf_predicted[:, ind : ind + S] = confs[-1][:, :S_trimmed]
@@ -539,5 +570,6 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
             )
         else:
             train_data = None
-        print("coords_predicted \n", coords_predicted*coords_predicted.new_tensor([(1296 - 1) / (self.model_resolution[1] - 1), (720 - 1) / (self.model_resolution[0] - 1)]))
+        # print("coords_predicted \n", coords_predicted*coords_predicted.new_tensor([(1296 - 1) / (self.model_resolution[1] - 1), (720 - 1) / (self.model_resolution[0] - 1)]))
+        # print("track feats support pyramid shape: ", [track_feat_support_pyramid[0].shape, track_feat_support_pyramid[1].shape,track_feat_support_pyramid[2].shape,track_feat_support_pyramid[3].shape,])
         return coords_predicted, vis_predicted, conf_predicted, train_data
