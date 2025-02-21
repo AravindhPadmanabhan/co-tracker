@@ -45,11 +45,13 @@ if __name__ == "__main__":
 
     window_frames = []
 
-    queries = [torch.tensor([[0, 100.0, 200.0], [0, 200.0, 200.0]], device=DEFAULT_DEVICE),
-               torch.tensor([[0, 100.0, 200.0], [0, 200.0, 200.0]], device=DEFAULT_DEVICE),
-               torch.tensor([[0, 100.0, 200.0], [16, 200.0, 200.0]], device=DEFAULT_DEVICE),
-               torch.tensor([[0, 100.0, 200.0], [16, 200.0, 200.0]], device=DEFAULT_DEVICE)]
-    removed_indices = [[], [], [1], []]
+    queries = [torch.tensor([[0, 200.0, 200.0], [0, 100.0, 600.0]], device=DEFAULT_DEVICE),
+               torch.tensor([[0, 200.0, 200.0], [0, 100.0, 600.0]], device=DEFAULT_DEVICE),
+               torch.tensor([[0, 200.0, 200.0], [16, 150.0, 250.0]], device=DEFAULT_DEVICE),
+               torch.tensor([[0, 200.0, 200.0], [16, 150.0, 250.0]], device=DEFAULT_DEVICE),
+               torch.tensor([[0, 200.0, 200.0], [32, 600.0, 300.0]], device=DEFAULT_DEVICE),
+               torch.tensor([[0, 200.0, 200.0], [32, 600.0, 300.0]], device=DEFAULT_DEVICE)]
+    removed_indices = [[], [], [1], [], [1], []]
 
     def _process_step(window_frames, is_first_step, input_queries, input_removed_indices):
         video_chunk = (
@@ -92,7 +94,7 @@ if __name__ == "__main__":
             else:
                 tracks = torch.cat((tracks, pred_tracks[:,-8:]), dim=1)
                 visibility = torch.cat((visibility, pred_visibility[:,-8:]), dim=1)
-            if len(window_frames) == 24:
+            if len(window_frames) == 48:
                 break
 
         window_frames.append(frame)
@@ -112,6 +114,7 @@ if __name__ == "__main__":
     print("Tracks shape: ", tracks.shape)
     print("Visibility shape: ", pred_visibility.shape)
     print("Video len: ", len(window_frames))
+    # print(tracks)
 
     # save a video with predicted tracks
     seq_name = args.video_path.split("/")[-1]

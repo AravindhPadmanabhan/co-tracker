@@ -183,6 +183,21 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
                                                 torch.zeros(B1, P1, len(removed_indices), L1, device=self.online_track_feat[i].device)), dim=2)
                 self.online_track_support[i] = torch.cat((self.online_track_support[i][:, :, mask], 
                                                 torch.zeros(B2, P2, len(removed_indices), L2, device=self.online_track_support[i].device)), dim=2)
+                
+    def update_track_feat_2(self, removed_indices, level):
+        B1, P1, N1, L1 = self.online_track_feat[level].shape
+        B2, P2, N2, L2 = self.online_track_support[level].shape
+
+        assert N1 == N2
+
+        if len(removed_indices) > 0:
+            mask = torch.ones(N1, dtype=torch.bool, device=self.online_track_feat[0].device) 
+            mask[removed_indices] = False
+            # mask = mask[None, None, :]
+            self.online_track_feat[level] = torch.cat((self.online_track_feat[level][:, :, mask], 
+                                            torch.zeros(B1, P1, len(removed_indices), L1, device=self.online_track_feat[level].device)), dim=2)
+            self.online_track_support[level] = torch.cat((self.online_track_support[level][:, :, mask], 
+                                            torch.zeros(B2, P2, len(removed_indices), L2, device=self.online_track_support[level].device)), dim=2)
            
     def update_queries(self, coords, vis, conf, removed_indices):
         if len(removed_indices) > 0:
@@ -474,7 +489,7 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
                         track_feat_support, device=device
                     )
 
-                self.update_track_feat(removed_indices)
+                self.update_track_feat_2(removed_indices, i)
 
                 self.online_track_feat[i] += track_feat * sample_mask  # in normal cotracker, sample_mask would be true once (in one window) for each query, but rn in updated cotracker, it would be true more than once
                 self.online_track_support[i] += track_feat_support * sample_mask
