@@ -481,7 +481,7 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
                     copy_over.expand_as(conf_init), conf_prev, conf_init
                 )
             
-            print("coords_init \n", coords_init*coords_init.new_tensor([(1296 - 1) / (self.model_resolution[1] - 1), (720 - 1) / (self.model_resolution[0] - 1)])*self.stride)
+            # print("coords_init \n", coords_init*coords_init.new_tensor([(1296 - 1) / (self.model_resolution[1] - 1), (720 - 1) / (self.model_resolution[0] - 1)])*self.stride)
 
             attention_mask = (queried_frames < ind + S).reshape(B, 1, N)  # B S N
             # import ipdb; ipdb.set_trace()
@@ -539,5 +539,5 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
             )
         else:
             train_data = None
-        print("coords_predicted \n", coords_predicted*coords_predicted.new_tensor([(1296 - 1) / (self.model_resolution[1] - 1), (720 - 1) / (self.model_resolution[0] - 1)]))
+        # print("coords_predicted \n", coords_predicted*coords_predicted.new_tensor([(1296 - 1) / (self.model_resolution[1] - 1), (720 - 1) / (self.model_resolution[0] - 1)]))
         return coords_predicted, vis_predicted, conf_predicted, train_data

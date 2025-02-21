@@ -9,4 +9,8 @@ __pycache__/
 *.mp4
 **/*.mp4
 
+# Ignore images
+*.png
+**/*.png
+
 *.egg-info/
