@@ -291,11 +291,11 @@ class CoTrackerOnlinePredictor(torch.nn.Module):
             )
 
         # If local or global support points are added, remove them
-        # if self.global_grid_size > 0 or self.local_grid_size > 0:
-        #     tracks = tracks[:,:,:self.N]
-        #     visibilities = visibilities[:,:,:self.N]
-        #     if not self.v2:
-        #         confidence = confidence[:,:,:self.N]
+        if self.global_grid_size > 0 or self.local_grid_size > 0:
+            tracks = tracks[:,:,:self.N]
+            visibilities = visibilities[:,:,:self.N]
+            if not self.v2:
+                confidence = confidence[:,:,:self.N]
             
         if not self.v2:
             visibilities = visibilities * confidence
