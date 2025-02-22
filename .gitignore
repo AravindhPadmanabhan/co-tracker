@@ -13,4 +13,8 @@ __pycache__/
 *.png
 **/*.png
 
+# Ignore weights
+*.pth
+**/*.pth
+
 *.egg-info/
