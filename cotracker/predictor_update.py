@@ -236,6 +236,8 @@ class CoTrackerOnlinePredictor(torch.nn.Module):
         # Initialize online video processing
         if is_first_step:
             self.model.init_video_online_processing()
+            B, N, D = queries.shape
+            self.N = N
             return (None, None, None)
             
         if queries is None:
@@ -243,7 +245,7 @@ class CoTrackerOnlinePredictor(torch.nn.Module):
         
         # Scale and assign queries
         B, N, D = queries.shape
-        self.N = N
+        assert N == self.N  # Ensure that number of queries is the same for every window
         assert D == 3
         queries = queries.clone()
         queries[:, :, 1:] *= queries.new_tensor(
