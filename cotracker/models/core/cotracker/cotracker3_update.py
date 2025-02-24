@@ -361,7 +361,7 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
         # vis_init = B T N 1
 
         step = 1  # How much the sliding window moves at every step
-        S = self.window_len/2 + 1
+        S = self.window_len // 2 + 1
 
         assert S == 9  # A tracker needs at least two frames to track something
         if is_online:
@@ -372,7 +372,7 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
             assert not is_train, "Training not supported in online mode."
 
         video = 2 * (video / 255.0) - 1.0
-        pad = self.window_len/2 - 1
+        pad = self.window_len // 2 - 1
         video = video.reshape(B, 1, T, C * H * W)
         if pad > 0:
             padding_tensor = video[:, :, -1:, :].expand(B, 1, pad, C * H * W)
@@ -411,6 +411,7 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
                     self.online_conf_predicted, (0, 0, 0, step), "constant"
                 )
                 # coords_predicted, vis_predicted, conf_predicted = self.update_queries(coords_predicted, vis_predicted, conf_predicted, removed_indices)
+                coords_predicted, vis_predicted, conf_predicted = self.update_tracks(coords_predicted, vis_predicted, conf_predicted, removed_indices)
 
         # We store our predictions here
         all_coords_predictions, all_vis_predictions, all_confidence_predictions = (
@@ -504,20 +505,20 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
 
         for ind in indices:
             if ind > 0:
-                overlap = S - step - step  # In second window (1-9), if query frame is up to 7, there are tracks for it, but if query frame is 8 or 9, there are no tracks for it
-                copy_over = (queried_frames < ind + overlap)[
+                overlap = S - step
+                copy_over = (queried_frames < ind + overlap - step)[  # In second window (1-9), if query frame is up to 7, there are tracks for it, but if query frame is 8 or 9, there are no tracks for it
                     :, None, :, None
                 ]  # B 1 N 1
                 coords_prev = coords_predicted[:, ind : ind + overlap] / self.stride
-                padding_tensor = coords_prev[:, -1:, :, :].expand(-1, pad+1, -1, -1)
+                padding_tensor = coords_prev[:, -1:, :, :].expand(-1, pad+step, -1, -1)
                 coords_prev = torch.cat([coords_prev, padding_tensor], dim=1)
 
                 vis_prev = vis_predicted[:, ind : ind + overlap, :, None].clone()
-                padding_tensor = vis_prev[:, -1:, :, :].expand(-1, pad+1, -1, -1)
+                padding_tensor = vis_prev[:, -1:, :, :].expand(-1, pad+step, -1, -1)
                 vis_prev = torch.cat([vis_prev, padding_tensor], dim=1)
 
                 conf_prev = conf_predicted[:, ind : ind + overlap, :, None].clone()
-                padding_tensor = conf_prev[:, -1:, :, :].expand(-1, pad+1, -1, -1)
+                padding_tensor = conf_prev[:, -1:, :, :].expand(-1, pad+step, -1, -1)
                 conf_prev = torch.cat([conf_prev, padding_tensor], dim=1)
 
                 coords_init = torch.where(
@@ -553,7 +554,6 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
             S_trimmed = (
                 T if is_online else min(T - ind, S)
             )  # accounts for last window duration
-            coords_predicted, vis_predicted, conf_predicted = self.update_tracks(coords_predicted, vis_predicted, conf_predicted, removed_indices)
             coords_predicted[:, ind : ind + S] = coords[-1][:, :S_trimmed]
             vis_predicted[:, ind : ind + S] = viss[-1][:, :S_trimmed]
             conf_predicted[:, ind : ind + S] = confs[-1][:, :S_trimmed]
