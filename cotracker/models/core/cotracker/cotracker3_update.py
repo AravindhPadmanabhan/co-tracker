@@ -359,27 +359,27 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
         # queries = B N 3
         # coords_init = B T N 2
         # vis_init = B T N 1
-        S = self.window_len
-        assert S >= 2  # A tracker needs at least two frames to track something
+
+        step = 1  # How much the sliding window moves at every step
+        S = self.window_len/2 + 1
+
+        assert S == 9  # A tracker needs at least two frames to track something
         if is_online:
-            assert T <= S, "Online mode: video chunk must be <= window size."
+            assert T == S, "Online mode: number of frames should be equal to window length (9)."
             assert (
                 self.online_ind is not None
             ), "Call model.init_video_online_processing() first."
             assert not is_train, "Training not supported in online mode."
 
-        step = S // 2  # How much the sliding window moves at every step
-
         video = 2 * (video / 255.0) - 1.0
-        pad = (
-            S - T if is_online else (S - T % S) % S
-        )  # We don't want to pad if T % S == 0
+        pad = self.window_len/2 - 1
         video = video.reshape(B, 1, T, C * H * W)
         if pad > 0:
             padding_tensor = video[:, :, -1:, :].expand(B, 1, pad, C * H * W)
             video = torch.cat([video, padding_tensor], dim=2)
         video = video.reshape(B, -1, C, H, W)
-        T_pad = video.shape[1]
+        T_pad = video.shape[1]  # T_pad = 16
+
         # The first channel is the frame number
         # The rest are the coordinates of points we want to track
         dtype = video.dtype
@@ -401,15 +401,14 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
                 self.online_conf_predicted = conf_predicted
             else:
                 # Pad online predictions with zeros for the current window
-                pad = min(step, T - step)
                 coords_predicted = F.pad(
-                    self.online_coords_predicted, (0, 0, 0, 0, 0, pad), "constant"
+                    self.online_coords_predicted, (0, 0, 0, 0, 0, step), "constant"
                 )
                 vis_predicted = F.pad(
-                    self.online_vis_predicted, (0, 0, 0, pad), "constant"
+                    self.online_vis_predicted, (0, 0, 0, step), "constant"
                 )
                 conf_predicted = F.pad(
-                    self.online_conf_predicted, (0, 0, 0, pad), "constant"
+                    self.online_conf_predicted, (0, 0, 0, step), "constant"
                 )
                 # coords_predicted, vis_predicted, conf_predicted = self.update_queries(coords_predicted, vis_predicted, conf_predicted, removed_indices)
 
@@ -423,19 +422,8 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
         C_ = C
         H4, W4 = H // self.stride, W // self.stride
 
-        # print("video shape: ", video.shape)
         # Compute convolutional features for the video or for the current chunk in case of online mode
-        if (not is_train) and (T > fmaps_chunk_size):
-            fmaps = []
-            for t in range(0, T, fmaps_chunk_size):
-                video_chunk = video[:, t : t + fmaps_chunk_size]
-                fmaps_chunk = self.fnet(video_chunk.reshape(-1, C_, H, W))
-                T_chunk = video_chunk.shape[1]
-                C_chunk, H_chunk, W_chunk = fmaps_chunk.shape[1:]
-                fmaps.append(fmaps_chunk.reshape(B, T_chunk, C_chunk, H_chunk, W_chunk))
-            fmaps = torch.cat(fmaps, dim=1).reshape(-1, C_chunk, H_chunk, W_chunk)
-        else:
-            fmaps = self.fnet(video.reshape(-1, C_, H, W))
+        fmaps = self.fnet(video.reshape(-1, C_, H, W))
         fmaps = fmaps.permute(0, 2, 3, 1)
         fmaps = fmaps / torch.sqrt(
             torch.maximum(
@@ -466,9 +454,9 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
         # print("fmaps pyramid shape: ", [fmap.shape for fmap in fmaps_pyramid])
         if is_online:
             sample_frames = queried_frames[:, None, :, None]  # B 1 N 1
-            left = 0 if self.online_ind == 0 else self.online_ind + step
-            right = self.online_ind + S
-            sample_mask = (sample_frames >= left) & (sample_frames < right)
+            left = 0 if self.online_ind == 0 else self.online_ind + S - 2
+            right = self.online_ind + S - 1
+            sample_mask = (sample_frames >= left) & (sample_frames < right)  # 0 to 7, only 8, only 9, ....
 
         for i in range(self.corr_levels):
             track_feat, track_feat_support = self.get_track_feat(
@@ -506,9 +494,9 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
         D_coords = 2
         coord_preds, vis_preds, confidence_preds = [], [], []
 
-        vis_init = torch.zeros((B, S, N, 1), device=device).float()
-        conf_init = torch.zeros((B, S, N, 1), device=device).float()
-        coords_init = queried_coords.reshape(B, 1, N, 2).expand(B, S, N, 2).float()
+        vis_init = torch.zeros((B, T_pad, N, 1), device=device).float()
+        conf_init = torch.zeros((B, T_pad, N, 1), device=device).float()
+        coords_init = queried_coords.reshape(B, 1, N, 2).expand(B, T_pad, N, 2).float()
 
         num_windows = (T - S + step - 1) // step + 1
         # We process only the current video chunk in the online mode
@@ -516,20 +504,20 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
 
         for ind in indices:
             if ind > 0:
-                overlap = S - step
+                overlap = S - step - step  # In second window (1-9), if query frame is up to 7, there are tracks for it, but if query frame is 8 or 9, there are no tracks for it
                 copy_over = (queried_frames < ind + overlap)[
                     :, None, :, None
                 ]  # B 1 N 1
                 coords_prev = coords_predicted[:, ind : ind + overlap] / self.stride
-                padding_tensor = coords_prev[:, -1:, :, :].expand(-1, step, -1, -1)
+                padding_tensor = coords_prev[:, -1:, :, :].expand(-1, pad+1, -1, -1)
                 coords_prev = torch.cat([coords_prev, padding_tensor], dim=1)
 
                 vis_prev = vis_predicted[:, ind : ind + overlap, :, None].clone()
-                padding_tensor = vis_prev[:, -1:, :, :].expand(-1, step, -1, -1)
+                padding_tensor = vis_prev[:, -1:, :, :].expand(-1, pad+1, -1, -1)
                 vis_prev = torch.cat([vis_prev, padding_tensor], dim=1)
 
                 conf_prev = conf_predicted[:, ind : ind + overlap, :, None].clone()
-                padding_tensor = conf_prev[:, -1:, :, :].expand(-1, step, -1, -1)
+                padding_tensor = conf_prev[:, -1:, :, :].expand(-1, pad+1, -1, -1)
                 conf_prev = torch.cat([conf_prev, padding_tensor], dim=1)
 
                 coords_init = torch.where(
