@@ -238,7 +238,8 @@ class CoTrackerOnlinePredictor(torch.nn.Module):
             self.model.init_video_online_processing()
             B, N, D = queries.shape
             self.N = N
-            return (None, None, None)
+            removed_indices = []
+            # return (None, None, None)
             
         if queries is None:
             raise ValueError("No queries given")
@@ -247,6 +248,7 @@ class CoTrackerOnlinePredictor(torch.nn.Module):
         B, N, D = queries.shape
         assert N == self.N  # Ensure that number of queries is the same for every window
         assert D == 3
+        assert T == 9
         queries = queries.clone()
         queries[:, :, 1:] *= queries.new_tensor(
             [
