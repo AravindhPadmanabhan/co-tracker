@@ -14,3 +14,6 @@ __pycache__/
 **/*.png
 
 *.egg-info/
+
+# ignore weights
+checkpoints/
