@@ -74,7 +74,7 @@ if __name__ == "__main__":
             plugin="FFMPEG",
         )
     ):
-        if i > 7:
+        if i > 8:
             if i == 11:
                 pred_tracks, pred_visibility, pred_confidence = _process_step(
                     window_frames,
