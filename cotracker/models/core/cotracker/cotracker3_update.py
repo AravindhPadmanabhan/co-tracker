@@ -420,7 +420,7 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
                     self.online_conf_predicted, (0, 0, 0, step), "constant"
                 )
                 # coords_predicted, vis_predicted, conf_predicted = self.update_queries(coords_predicted, vis_predicted, conf_predicted, removed_indices)
-                coords_predicted, vis_predicted, conf_predicted = self.update_tracks(coords_predicted, vis_predicted, conf_predicted, removed_indices)
+                coords_predicted, vis_predicted, conf_predicted = self.update_tracks(coords_predicted, vis_predicted, conf_predicted, removed_indices, new_queries_num)
 
         # We store our predictions here
         all_coords_predictions, all_vis_predictions, all_confidence_predictions = (
@@ -487,7 +487,7 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
                         track_feat_support, device=device
                     )
 
-                self.update_track_feat_2(removed_indices, i)
+                self.update_track_feat_2(removed_indices, new_queries_num, i)
 
                 self.online_track_feat[i] += track_feat * sample_mask  # in normal cotracker, sample_mask would be true once (in one window) for each query, but rn in updated cotracker, it would be true more than once
                 self.online_track_support[i] += track_feat_support * sample_mask
