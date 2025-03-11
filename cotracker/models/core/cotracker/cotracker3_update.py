@@ -184,7 +184,7 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
                 self.online_track_support[i] = torch.cat((self.online_track_support[i][:, :, mask], 
                                                 torch.zeros(B2, P2, len(removed_indices), L2, device=self.online_track_support[i].device)), dim=2)
                 
-    def update_track_feat_2(self, removed_indices, level):
+    def update_track_feat_2(self, removed_indices, new_queries_num, level):
         B1, P1, N1, L1 = self.online_track_feat[level].shape
         B2, P2, N2, L2 = self.online_track_support[level].shape
 
@@ -193,11 +193,14 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
         if len(removed_indices) > 0:
             mask = torch.ones(N1, dtype=torch.bool, device=self.online_track_feat[0].device) 
             mask[removed_indices] = False
-            # mask = mask[None, None, :]
-            self.online_track_feat[level] = torch.cat((self.online_track_feat[level][:, :, mask], 
-                                            torch.zeros(B1, P1, len(removed_indices), L1, device=self.online_track_feat[level].device)), dim=2)
-            self.online_track_support[level] = torch.cat((self.online_track_support[level][:, :, mask], 
-                                            torch.zeros(B2, P2, len(removed_indices), L2, device=self.online_track_support[level].device)), dim=2)
+            self.online_track_feat[level] = self.online_track_feat[level][:, :, mask]
+            self.online_track_support[level] = self.online_track_support[level][:, :, mask]
+
+        if new_queries_num > 0:
+            self.online_track_feat[level] = torch.cat((self.online_track_feat[level], 
+                                            torch.zeros(B1, P1, new_queries_num, L1, device=self.online_track_feat[level].device)), dim=2)
+            self.online_track_support[level] = torch.cat((self.online_track_support[level], 
+                                            torch.zeros(B2, P2, new_queries_num, L2, device=self.online_track_support[level].device)), dim=2)
            
     def update_queries(self, coords, vis, conf, removed_indices):
         if len(removed_indices) > 0:
@@ -209,14 +212,19 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
 
         return coords, vis, conf
 
-    def update_tracks(self, coords_predicted, vis_predicted, conf_predicted, removed_indices):
+    def update_tracks(self, coords_predicted, vis_predicted, conf_predicted, removed_indices, new_queries_num):
         B, T, N, _ = coords_predicted.shape
         if len(removed_indices) > 0:
             mask = torch.ones(N, dtype=torch.bool, device=coords_predicted.device)
             mask[removed_indices] = False
-            coords_predicted = torch.cat((coords_predicted[:, :, mask], torch.zeros(B, T, len(removed_indices), 2, device=coords_predicted.device)), dim=2)
-            vis_predicted = torch.cat((vis_predicted[:, :, mask], torch.zeros(B, T, len(removed_indices), device=vis_predicted.device)), dim=2)
-            conf_predicted = torch.cat((conf_predicted[:, :, mask], torch.zeros(B, T, len(removed_indices), device=conf_predicted.device)), dim=2)
+            coords_predicted = coords_predicted[:, :, mask]
+            vis_predicted = vis_predicted[:, :, mask]
+            conf_predicted = conf_predicted[:, :, mask]
+
+        if new_queries_num > 0:
+            coords_predicted = torch.cat((coords_predicted, torch.zeros(B, T, new_queries_num, 2, device=coords_predicted.device)), dim=2)
+            vis_predicted = torch.cat((vis_predicted, torch.zeros(B, T, new_queries_num, device=vis_predicted.device)), dim=2)
+            conf_predicted = torch.cat((conf_predicted, torch.zeros(B, T, new_queries_num, device=conf_predicted.device)), dim=2)
 
         return coords_predicted, vis_predicted, conf_predicted
 
@@ -325,6 +333,7 @@ class CoTrackerThreeOnline(CoTrackerThreeBase):
         fmaps_chunk_size=200,
         is_online=False,
         removed_indices=None,
+        new_queries_num: int = 0,
     ):
         """Predict tracks
 

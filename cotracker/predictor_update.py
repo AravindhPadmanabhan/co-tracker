@@ -231,6 +231,7 @@ class CoTrackerOnlinePredictor(torch.nn.Module):
         is_first_step: bool = False,
         queries: torch.Tensor = None,
         removed_indices = None,
+        new_queries_num: int = 0,
     ):
         B, T, C, H, W = video_chunk.shape
         # Initialize online video processing
@@ -246,7 +247,7 @@ class CoTrackerOnlinePredictor(torch.nn.Module):
         
         # Scale and assign queries
         B, N, D = queries.shape
-        assert N == self.N  # Ensure that number of queries is the same for every window
+        # assert N == self.N  # Ensure that number of queries is the same for every window
         assert D == 3
         assert T == 9
         queries = queries.clone()
@@ -269,7 +270,7 @@ class CoTrackerOnlinePredictor(torch.nn.Module):
 
         # CoTrackerThreeOnline inference
         tracks, visibilities, confidence, __ = self.model(
-            video=video_chunk, queries=self.queries, iters=6, is_online=True, removed_indices=removed_indices
+            video=video_chunk, queries=self.queries, iters=6, is_online=True, removed_indices=removed_indices, new_queries_num=new_queries_num
         )
 
         visibilities = visibilities * confidence
