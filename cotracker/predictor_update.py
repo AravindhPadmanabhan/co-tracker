@@ -240,6 +240,7 @@ class CoTrackerOnlinePredictor(torch.nn.Module):
             B, N, D = queries.shape
             self.N = N
             removed_indices = []
+            new_queries_num = 0
             # return (None, None, None)
             
         if queries is None:
