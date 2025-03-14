@@ -215,6 +215,8 @@ class CoTrackerOnlinePredictor(torch.nn.Module):
         offline=False,
         v2=False,
         window_len=16,
+        local_grid_size=8,
+        local_grid_extent=32,
     ):
         super().__init__()
         self.support_grid_size = 6
@@ -223,6 +225,44 @@ class CoTrackerOnlinePredictor(torch.nn.Module):
         self.step = model.window_len // 2
         self.model = model
         self.model.eval()
+        local_grid_size=8,
+        local_grid_extent=32,
+    
+    def add_support_grid(self, queries, device, B): 
+        if self.local_grid_size > 0:
+            aug_queries = []
+
+            for i in range(queries.shape[1]):
+                frame = queries[0, i, 0].item()
+                grid_pts = get_points_on_a_grid(
+                    self.local_grid_size, 
+                    (self.local_grid_extent, self.local_grid_extent),
+                    (queries[0, i, 2].item(), queries[0, i, 1].item()),  # ensure x, y order
+                    device=device,
+                )
+                grid_pts = torch.cat([torch.ones_like(grid_pts[:, :, :1]) * frame, grid_pts], dim=2)
+                grid_pts = grid_pts.repeat(B, 1, 1)
+
+                # Append query first, then its support grid
+                aug_queries.append(queries[:, i:i+1, :])  # Extract and keep the original shape
+                aug_queries.append(grid_pts)
+
+            # Concatenate along the second dimension to maintain the interleaved pattern
+            queries = torch.cat(aug_queries, dim=1)
+
+        return queries
+    
+    def augment_removed_indices(self, removed_indices, new_queries_num):
+        new_queries_num = new_queries_num*(1 + self.local_grid_size**2)
+        aug_removed_indices = []
+        if self.local_grid_size > 0:
+            # removed_indices = [i + self.local_grid_size**2 for i in removed_indices]
+            for i in range(len(removed_indices)):
+                aug_index = removed_indices[i]*(1 + self.local_grid_size**2)
+                aug_removed_indices.append(aug_index)
+                removed_grid_indices = list(range(aug_index + 1, aug_index + 1 + self.local_grid_size**2))
+                aug_removed_indices += removed_grid_indices
+        return aug_removed_indices, new_queries_num
 
     @torch.no_grad()
     def forward(
@@ -251,6 +291,10 @@ class CoTrackerOnlinePredictor(torch.nn.Module):
         # assert N == self.N  # Ensure that number of queries is the same for every window
         assert D == 3
         assert T == 9
+
+        queries = self.add_support_grid(queries, video_chunk.device, B)
+        removed_indices, new_queries_num = self.augment_removed_indices(removed_indices, new_queries_num)
+
         queries = queries.clone()
         queries[:, :, 1:] *= queries.new_tensor(
             [
@@ -273,6 +317,13 @@ class CoTrackerOnlinePredictor(torch.nn.Module):
         tracks, visibilities, confidence, __ = self.model(
             video=video_chunk, queries=self.queries, iters=6, is_online=True, removed_indices=removed_indices, new_queries_num=new_queries_num
         )
+
+        # If local or global support points are added, remove them
+        if self.local_grid_size > 0:
+            step_size = 1 + self.local_grid_size**2
+            tracks = tracks[:,:,::step_size]
+            visibilities = visibilities[:,:,::step_size]
+            confidence = confidence[:,:,::step_size]
 
         visibilities = visibilities * confidence
         thr = 0.6
