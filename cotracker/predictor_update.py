@@ -225,8 +225,8 @@ class CoTrackerOnlinePredictor(torch.nn.Module):
         self.step = model.window_len // 2
         self.model = model
         self.model.eval()
-        local_grid_size=8,
-        local_grid_extent=32,
+        self.local_grid_size = local_grid_size
+        self.local_grid_extent = local_grid_extent
     
     def add_support_grid(self, queries, device, B): 
         if self.local_grid_size > 0:
