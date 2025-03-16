@@ -254,15 +254,16 @@ class CoTrackerOnlinePredictor(torch.nn.Module):
     
     def augment_removed_indices(self, removed_indices, new_queries_num):
         new_queries_num = new_queries_num*(1 + self.local_grid_size**2)
-        aug_removed_indices = []
         if self.local_grid_size > 0:
-            # removed_indices = [i + self.local_grid_size**2 for i in removed_indices]
+            aug_removed_indices = []
             for i in range(len(removed_indices)):
                 aug_index = removed_indices[i]*(1 + self.local_grid_size**2)
                 aug_removed_indices.append(aug_index)
                 removed_grid_indices = list(range(aug_index + 1, aug_index + 1 + self.local_grid_size**2))
                 aug_removed_indices += removed_grid_indices
-        return aug_removed_indices, new_queries_num
+
+            removed_indices = aug_removed_indices
+        return removed_indices, new_queries_num
 
     @torch.no_grad()
     def forward(
