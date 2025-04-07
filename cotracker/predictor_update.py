@@ -328,6 +328,7 @@ class CoTrackerOnlinePredictor(torch.nn.Module):
 
         visibilities = visibilities * confidence
         thr = 0.6
+        thr_conf = 0.99
         return (
             tracks
             * tracks.new_tensor(
@@ -337,5 +338,5 @@ class CoTrackerOnlinePredictor(torch.nn.Module):
                 ]
             ),
             visibilities > thr,
-            confidence
+            confidence > thr_conf,
         )
