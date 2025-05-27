@@ -160,7 +160,7 @@ def run_eval(cfg: DefaultConfig):
 
     start = time.time()
     evaluate_result = evaluator.evaluate_sequence(
-        predictor, test_dataloader, dataset_name=cfg.dataset_name
+        predictor, test_dataloader, dataset_name=cfg.dataset_name, updated_model=True
     )
     end = time.time()
     print(end - start)

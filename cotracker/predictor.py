@@ -298,5 +298,4 @@ class CoTrackerOnlinePredictor(torch.nn.Module):
                 ]
             ),
             visibilities > thr,
-            confidence
         )
