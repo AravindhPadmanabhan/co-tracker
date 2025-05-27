@@ -183,7 +183,7 @@ class Evaluator:
         test_dataloader: torch.utils.data.DataLoader,
         dataset_name: str,
         train_mode=False,
-        visualize_every: int = 50,
+        visualize_every: int = 1,
         writer: Optional[SummaryWriter] = None,
         step: Optional[int] = 0,
         updated_model: bool = True,
@@ -195,7 +195,9 @@ class Evaluator:
             fps=7,
         )
 
-        for ind, sample in enumerate(tqdm(test_dataloader)):
+        for i, sample in enumerate(tqdm(test_dataloader)):
+            if i != 9:
+                continue
             if isinstance(sample, tuple):
                 sample, gotit = sample
                 if not all(gotit):
@@ -212,14 +214,14 @@ class Evaluator:
                 and hasattr(model, "sequence_len")
                 and (sample.visibility[:, : model.sequence_len].sum() == 0)
             ):
-                print(f"skipping batch {ind}")
+                print(f"skipping batch {i}")
                 continue
 
             if "tapvid" in dataset_name:
                 queries = sample.query_points.clone().float()
 
                 # print("Query frames: ",  queries[0, :, 0])
-                # print("Video len: ", sample.video.shape[1])
+                print("Video shape: ", sample.video.shape)
 
                 queries = torch.stack(
                     [
@@ -315,8 +317,8 @@ class Evaluator:
             if dataset_name == "badja" or dataset_name == "fastcapture":
                 seq_name = sample.seq_name[0]
             else:
-                seq_name = str(ind)
-            if ind % visualize_every == 0:
+                seq_name = str(i)
+            if i % visualize_every == 0:
                 viz.visualize(
                     sample.video,
                     pred_tracks[0] if isinstance(pred_tracks, tuple) else pred_tracks,
