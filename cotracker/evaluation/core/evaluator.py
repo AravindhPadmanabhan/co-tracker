@@ -196,8 +196,6 @@ class Evaluator:
         )
 
         for i, sample in enumerate(tqdm(test_dataloader)):
-            if i != 9:
-                continue
             if isinstance(sample, tuple):
                 sample, gotit = sample
                 if not all(gotit):

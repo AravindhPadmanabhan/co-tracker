@@ -173,6 +173,7 @@ def run_eval(cfg: DefaultConfig):
     print(f"Dumping eval results to {result_file}.")
     with open(result_file, "w") as f:
         json.dump(evaluate_result, f)
+    return evaluate_result
 
 
 cs = hydra.core.config_store.ConfigStore.instance()
@@ -183,8 +184,13 @@ cs.store(name="default_config_eval", node=DefaultConfig)
 def evaluate(cfg: DefaultConfig) -> None:
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = str(cfg.gpu_idx)
-    run_eval(cfg)
-
+    results = []
+    for i in range(50):
+        result = run_eval(cfg)
+        results.append(result)
+    print("Average results over 50 runs:")
+    avg_results = {k: np.mean([r[k] for r in results]) for k in results[0].keys()}
+    print(avg_results)
 
 if __name__ == "__main__":
     evaluate()
